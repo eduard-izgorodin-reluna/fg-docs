@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FG Docs - Reluna</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #fb6428;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #f6f8fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+        }
+        h1 {
+            font-size: 2.5rem;
+            color: #121212;
+            margin-bottom: 8px;
+        }
+        p {
+            color: rgba(18,18,18,0.6);
+            margin-bottom: 32px;
+        }
+        .links {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            align-items: center;
+        }
+        a {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 32px;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(251,100,40,0.3);
+        }
+        .updated {
+            margin-top: 32px;
+            font-size: 0.85rem;
+            color: rgba(18,18,18,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 FG Documentation</h1>
+        <p>Reluna Family Governance Platform</p>
+        <div class="links">
+            <a href="reports/git-history.html">
+                🌳 Git History Report (3062 commits)
+            </a>
+        </div>
+        <p class="updated">Last updated: November 27, 2025</p>
+    </div>
+</body>
+</html>
