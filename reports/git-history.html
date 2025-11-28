@@ -28,7 +28,6 @@
         .compare-select { flex: 1; min-width: 150px; padding: 10px 16px; border: 1px solid var(--border-primary); border-radius: 6px; font-size: 14px; background: white; }
         .compare-btn { padding: 10px 24px; background: var(--success); color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
         .compare-btn:hover { background: #158a7a; }
-        .compare-btn:disabled { background: #ccc; cursor: not-allowed; }
         .latest-badge { background: var(--success); color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px; }
     </style>
 </head>
@@ -43,24 +42,24 @@
             <ul class="snapshot-list">
                 <li class="snapshot-item">
                     <div>
-                        <span class="snapshot-date">2025-11-28</span><span class="latest-badge">latest</span>
-                        <div class="snapshot-stats">3143 коммитов - 41 авторов - 149 PR</div>
+                        <span class="snapshot-date">2025-11-28 09:00</span><span class="latest-badge">latest</span>
+                        <div class="snapshot-stats">3143 коммитов - 149 PR</div>
                     </div>
-                    <a href="snapshots/2025-11-28.html" class="snapshot-link">Открыть</a>
+                    <a href="snapshots/2025-11-28_09-00.html" class="snapshot-link">Открыть</a>
                 </li>
                 <li class="snapshot-item">
                     <div>
-                        <span class="snapshot-date">2025-11-28-00</span><span style="background:#0069d1;color:white;padding:2px 8px;border-radius:4px;font-size:11px;margin-left:8px;">ночной</span>
-                        <div class="snapshot-stats">3143 коммитов - 41 авторов - 149 PR</div>
+                        <span class="snapshot-date">2025-11-28 00:00</span>
+                        <div class="snapshot-stats">3088 коммитов - 132 PR</div>
                     </div>
-                    <a href="snapshots/2025-11-28-00.html" class="snapshot-link">Открыть</a>
+                    <a href="snapshots/2025-11-28_00-00.html" class="snapshot-link">Открыть</a>
                 </li>
                 <li class="snapshot-item">
                     <div>
-                        <span class="snapshot-date">2025-11-27</span>
-                        <div class="snapshot-stats">3062 коммитов - 40 авторов - 129 PR</div>
+                        <span class="snapshot-date">2025-11-27 12:00</span>
+                        <div class="snapshot-stats">3062 коммитов - 129 PR</div>
                     </div>
-                    <a href="snapshots/2025-11-27.html" class="snapshot-link">Открыть</a>
+                    <a href="snapshots/2025-11-27_12-00.html" class="snapshot-link">Открыть</a>
                 </li>
             </ul>
 
@@ -68,15 +67,15 @@
                 <h3>Сравнить слепки</h3>
                 <div class="compare-row">
                     <select id="compareFrom" class="compare-select">
-                        <option value="2025-11-27">2025-11-27</option>
-                        <option value="2025-11-28-00">2025-11-28 (ночной)</option>
-                        <option value="2025-11-28">2025-11-28</option>
+                        <option value="2025-11-27_12-00">2025-11-27 12:00</option>
+                        <option value="2025-11-28_00-00">2025-11-28 00:00</option>
+                        <option value="2025-11-28_09-00">2025-11-28 09:00</option>
                     </select>
                     <span>→</span>
                     <select id="compareTo" class="compare-select">
-                        <option value="2025-11-28">2025-11-28</option>
-                        <option value="2025-11-28-00">2025-11-28 (ночной)</option>
-                        <option value="2025-11-27">2025-11-27</option>
+                        <option value="2025-11-28_09-00">2025-11-28 09:00</option>
+                        <option value="2025-11-28_00-00">2025-11-28 00:00</option>
+                        <option value="2025-11-27_12-00">2025-11-27 12:00</option>
                     </select>
                     <button class="compare-btn" onclick="compare()">Сравнить</button>
                 </div>
