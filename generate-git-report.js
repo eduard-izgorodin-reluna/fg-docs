@@ -3,6 +3,14 @@
 /**
  * Git Report Generator - Reluna Style
  * Generates HTML report with proper git graph visualization
+ *
+ * Algorithm: Process commits in topological order (newest first).
+ * Each lane tracks which commit hash it's waiting for.
+ * When a commit is processed:
+ * - If it matches an existing lane, use that lane
+ * - Otherwise create a new lane (this is a branch tip)
+ * - When we reach a commit's parent, the lane continues
+ * - When a lane's target hash is never found, the lane ends (branch started after our window)
  */
 
 const { execSync } = require('child_process');
@@ -11,18 +19,23 @@ const fs = require('fs');
 const WEEKS = process.argv[2] || 3;
 const OUTPUT_FILE = `git-report-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.html`;
 
-console.log(`🔍 Collecting git data for last ${WEEKS} weeks...`);
+// Check if "all" was passed
+const isAllHistory = WEEKS === 'all';
+const sinceArg = isAllHistory ? '' : `--since="${WEEKS} weeks ago"`;
+
+console.log(`🔍 Collecting git data${isAllHistory ? ' (full history)' : ` for last ${WEEKS} weeks`}...`);
 
 // Get commits with full info
 const gitLog = execSync(
-  `git log --all --since="${WEEKS} weeks ago" --pretty=format:'%h|%p|%s|%an|%ad|%d' --date=short --topo-order`,
-  { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 }
+  `git log --all ${sinceArg} --pretty=format:'%H|%P|%s|%an|%ad|%d' --date=short --topo-order`,
+  { encoding: 'utf-8', maxBuffer: 100 * 1024 * 1024 }
 );
 
 const commits = gitLog.trim().split('\n').filter(Boolean).map(line => {
   const [hash, parents, message, author, date, refs] = line.split('|');
   return {
     hash,
+    shortHash: hash.slice(0, 7),
     parents: parents ? parents.split(' ').filter(Boolean) : [],
     message,
     author,
@@ -34,6 +47,10 @@ const commits = gitLog.trim().split('\n').filter(Boolean).map(line => {
 });
 
 console.log(`📊 Found ${commits.length} commits`);
+
+// Create lookup map for quick parent->child relationships
+const commitMap = new Map();
+commits.forEach(c => commitMap.set(c.hash, c));
 
 // Get unique authors
 const authors = [...new Set(commits.map(c => c.author))];
@@ -52,10 +69,23 @@ const COLORS = [
   '#8b5cf6', // purple
 ];
 
-const MAX_COLUMNS = 8;
+const MAX_COLUMNS = 50; // Практически без ограничений
 
-// Track active lanes
-let lanes = [];
+/**
+ * Improved lane tracking algorithm
+ *
+ * Key insight: We process commits top-to-bottom (newest to oldest).
+ * A "lane" represents an active line going DOWN looking for a specific commit hash.
+ *
+ * When we see a commit:
+ * - Check if any lane is waiting for this commit's hash
+ * - If yes: this commit occupies that lane, lane now waits for commit's parent
+ * - If no: this is a new branch tip, create new lane
+ *
+ * Lines should only be drawn when there's actually a path between commits.
+ */
+
+let lanes = []; // Array of { targetHash, column, color }
 let maxColumn = 0;
 
 function getNextFreeColumn() {
@@ -65,33 +95,44 @@ function getNextFreeColumn() {
   return MAX_COLUMNS - 1;
 }
 
-// Process commits - assign columns
+// First pass: assign columns to commits
 commits.forEach((commit, idx) => {
-  // Save lanes BEFORE processing this commit (for drawing lines that pass through)
-  commit.lanesBeforeCommit = lanes.map(l => ({ column: l.column, color: l.color, nextHash: l.nextHash }));
+  // Save which lanes exist BEFORE processing this commit
+  commit.lanesBeforeCommit = lanes.map(l => ({ column: l.column, color: l.color, targetHash: l.targetHash }));
 
-  const laneIdx = lanes.findIndex(l => l.nextHash === commit.hash);
+  // Find if any lane is waiting for this commit
+  const laneIdx = lanes.findIndex(l => l.targetHash === commit.hash);
 
   if (laneIdx >= 0) {
-    // This commit is expected by an existing lane
+    // This commit was expected by an existing lane
     commit.column = lanes[laneIdx].column;
     commit.color = lanes[laneIdx].color;
 
-    if (commit.parents.length === 0) {
-      // Root commit - remove lane
-      lanes.splice(laneIdx, 1);
-    } else {
-      // Continue lane to first parent
-      lanes[laneIdx].nextHash = commit.parents[0];
+    // Check if there are OTHER lanes also waiting for this same commit (merge point)
+    const mergingLanes = lanes.filter((l, i) => i !== laneIdx && l.targetHash === commit.hash);
+    commit.mergingFromColumns = mergingLanes.map(l => l.column);
 
-      // Add new lanes for merge parents
+    // Remove all lanes that were targeting this commit
+    lanes = lanes.filter(l => l.targetHash !== commit.hash);
+
+    // Now add lanes for this commit's parents
+    if (commit.parents.length > 0) {
+      // First parent continues in the same column
+      lanes.push({
+        targetHash: commit.parents[0],
+        column: commit.column,
+        color: commit.color
+      });
+
+      // Additional parents get new columns (merge sources)
       for (let i = 1; i < commit.parents.length; i++) {
         const parentHash = commit.parents[i];
-        if (!lanes.some(l => l.nextHash === parentHash)) {
+        // Only add if not already tracked
+        if (!lanes.some(l => l.targetHash === parentHash)) {
           const newCol = getNextFreeColumn();
           if (newCol > maxColumn) maxColumn = Math.min(newCol, MAX_COLUMNS - 1);
           lanes.push({
-            nextHash: parentHash,
+            targetHash: parentHash,
             column: newCol,
             color: newCol % COLORS.length
           });
@@ -99,27 +140,29 @@ commits.forEach((commit, idx) => {
       }
     }
   } else {
-    // New branch - this commit starts a new lane
+    // This commit is not expected by any lane - it's a new branch tip
     const newCol = getNextFreeColumn();
     if (newCol > maxColumn) maxColumn = Math.min(newCol, MAX_COLUMNS - 1);
     commit.column = newCol;
     commit.color = newCol % COLORS.length;
     commit.isNewBranch = true;
+    commit.mergingFromColumns = [];
 
+    // Add lanes for parents
     if (commit.parents.length > 0) {
       lanes.push({
-        nextHash: commit.parents[0],
+        targetHash: commit.parents[0],
         column: newCol,
         color: commit.color
       });
 
       for (let i = 1; i < commit.parents.length; i++) {
         const parentHash = commit.parents[i];
-        if (!lanes.some(l => l.nextHash === parentHash)) {
+        if (!lanes.some(l => l.targetHash === parentHash)) {
           const mergeCol = getNextFreeColumn();
           if (mergeCol > maxColumn) maxColumn = Math.min(mergeCol, MAX_COLUMNS - 1);
           lanes.push({
-            nextHash: parentHash,
+            targetHash: parentHash,
             column: mergeCol,
             color: mergeCol % COLORS.length
           });
@@ -128,8 +171,8 @@ commits.forEach((commit, idx) => {
     }
   }
 
-  // Save lanes AFTER processing (for next commit)
-  commit.lanesAfterCommit = lanes.map(l => ({ column: l.column, color: l.color, nextHash: l.nextHash }));
+  // Save which lanes exist AFTER processing this commit
+  commit.lanesAfterCommit = lanes.map(l => ({ column: l.column, color: l.color, targetHash: l.targetHash }));
 });
 
 console.log(`📝 Max columns: ${maxColumn + 1}`);
@@ -169,61 +212,71 @@ function parseBranchTags(refs) {
   return html;
 }
 
-function generateSvgLines(commit, idx, commits) {
+function generateSvgLines(commit) {
   const lines = [];
   const myX = 10 + commit.column * COLUMN_WIDTH;
   const h = 28; // row height
 
-  // Collect all columns that need lines
-  const columnsToDrawBefore = new Set();
-  const columnsToDrawAfter = new Set();
+  // Collect columns from before and after
+  const beforeCols = new Map(); // column -> color
+  const afterCols = new Map();  // column -> color
 
-  // Lanes BEFORE this commit (coming from above)
   commit.lanesBeforeCommit.forEach(lane => {
-    columnsToDrawBefore.add(lane.column);
+    beforeCols.set(lane.column, lane.color);
   });
 
-  // Lanes AFTER this commit (going down)
   commit.lanesAfterCommit.forEach(lane => {
-    columnsToDrawAfter.add(lane.column);
+    afterCols.set(lane.column, lane.color);
   });
 
-  // Draw lines for all columns
-  const allColumns = new Set([...columnsToDrawBefore, ...columnsToDrawAfter]);
+  // Get all unique columns that need lines
+  const allColumns = new Set([...beforeCols.keys(), ...afterCols.keys()]);
 
   allColumns.forEach(col => {
     const x = 10 + col * COLUMN_WIDTH;
-    const color = COLORS[col % COLORS.length];
+    const colorIdx = beforeCols.has(col) ? beforeCols.get(col) : afterCols.get(col);
+    const color = COLORS[colorIdx % COLORS.length];
 
-    const hasBefore = columnsToDrawBefore.has(col);
-    const hasAfter = columnsToDrawAfter.has(col);
+    const hasBefore = beforeCols.has(col);
+    const hasAfter = afterCols.has(col);
     const isMyColumn = col === commit.column;
 
     if (hasBefore && hasAfter) {
-      // Line passes through - full height
+      // Line passes through completely
       lines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="${color}" stroke-width="2"/>`);
     } else if (hasBefore && !hasAfter) {
-      // Line ends here (at this commit's dot level)
+      // Line ends at this row (at the dot level for commit column, or just ends)
       if (isMyColumn) {
+        // Line comes in and ends at the commit dot
         lines.push(`<line x1="${x}" y1="0" x2="${x}" y2="14" stroke="${color}" stroke-width="2"/>`);
       } else {
-        // Branch merges in - line goes to middle then horizontal
+        // This is a merge line coming in from side
         lines.push(`<line x1="${x}" y1="0" x2="${x}" y2="14" stroke="${color}" stroke-width="2"/>`);
       }
     } else if (!hasBefore && hasAfter) {
-      // Line starts here (new branch)
+      // Line starts here (new branch beginning)
       lines.push(`<line x1="${x}" y1="14" x2="${x}" y2="${h}" stroke="${color}" stroke-width="2"/>`);
     }
   });
 
-  // Draw merge horizontal lines
+  // Draw merge horizontal lines from merging columns to commit column
+  if (commit.mergingFromColumns && commit.mergingFromColumns.length > 0) {
+    commit.mergingFromColumns.forEach(mergeCol => {
+      const fromX = 10 + mergeCol * COLUMN_WIDTH;
+      const color = COLORS[mergeCol % COLORS.length];
+      lines.push(`<line x1="${Math.min(fromX, myX)}" y1="14" x2="${Math.max(fromX, myX)}" y2="14" stroke="${color}" stroke-width="2"/>`);
+    });
+  }
+
+  // Draw horizontal lines for merge parents (going to new lanes)
   if (commit.parents.length > 1) {
     for (let i = 1; i < commit.parents.length; i++) {
       const parentHash = commit.parents[i];
-      const mergingLane = commit.lanesAfterCommit.find(l => l.nextHash === parentHash);
-      if (mergingLane && mergingLane.column !== commit.column) {
-        const fromX = 10 + mergingLane.column * COLUMN_WIDTH;
-        lines.push(`<line x1="${Math.min(fromX, myX)}" y1="14" x2="${Math.max(fromX, myX)}" y2="14" stroke="${COLORS[mergingLane.color]}" stroke-width="2"/>`);
+      const parentLane = commit.lanesAfterCommit.find(l => l.targetHash === parentHash);
+      if (parentLane && parentLane.column !== commit.column) {
+        const toX = 10 + parentLane.column * COLUMN_WIDTH;
+        const color = COLORS[parentLane.color % COLORS.length];
+        lines.push(`<line x1="${Math.min(toX, myX)}" y1="14" x2="${Math.max(toX, myX)}" y2="14" stroke="${color}" stroke-width="2"/>`);
       }
     }
   }
@@ -238,6 +291,7 @@ const stats = {
 };
 
 const repoName = execSync('basename $(git rev-parse --show-toplevel)', { encoding: 'utf-8' }).trim();
+const periodLabel = isAllHistory ? 'вся история' : `${WEEKS} недель`;
 
 let html = `<!DOCTYPE html>
 <html lang="ru">
@@ -459,7 +513,7 @@ let html = `<!DOCTYPE html>
 <body>
     <div class="header">
         <h1>📊 ${repoName}</h1>
-        <p>Git History • Период: ${WEEKS} недель • ${new Date().toLocaleDateString('ru-RU')}</p>
+        <p>Git History • Период: ${periodLabel} • ${new Date().toLocaleDateString('ru-RU')}</p>
         <div class="stats">
             <div class="stat"><div class="number">${stats.total}</div><div class="label">коммитов</div></div>
             <div class="stat"><div class="number">${stats.authors}</div><div class="label">авторов</div></div>
@@ -483,7 +537,7 @@ let html = `<!DOCTYPE html>
 commits.forEach((commit, idx) => {
   const type = getCommitType(commit.message);
   const dotX = 10 + commit.column * COLUMN_WIDTH;
-  const svgLines = generateSvgLines(commit, idx, commits);
+  const svgLines = generateSvgLines(commit);
   const branchTags = parseBranchTags(commit.refs);
   const mergeIcon = commit.parents.length > 1 ? '<span class="merge-icon">⎇</span>' : '';
   const authorColor = authorColors[commit.author] || 0;
@@ -494,7 +548,7 @@ commits.forEach((commit, idx) => {
                 <div class="commit-dot" style="left: ${dotX - 4}px; background: ${COLORS[commit.color]};"></div>
             </div>
             <div class="commit-info">
-                <span class="commit-hash">${commit.hash}</span>
+                <span class="commit-hash">${commit.shortHash}</span>
                 ${branchTags}${mergeIcon}
                 <span class="commit-message">${escapeHtml(commit.message)}</span>
                 <span class="commit-author a${authorColor}">${escapeHtml(commit.author)}</span>
@@ -526,4 +580,9 @@ html += `    </div>
 fs.writeFileSync(OUTPUT_FILE, html);
 console.log(`✅ Report generated: ${OUTPUT_FILE}`);
 
-execSync(`open ${OUTPUT_FILE}`);
+// Try to open, but don't fail if it doesn't work
+try {
+  execSync(`open ${OUTPUT_FILE}`);
+} catch (e) {
+  console.log(`📁 Open the file manually: ${OUTPUT_FILE}`);
+}
