@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сравнение слепков - FG</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #fb6428; --text-primary: #121212; --bg-primary: #fff; --bg-secondary: #f6f8fa; --border-primary: rgba(18,18,18,0.1); }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-secondary); height: 100vh; display: flex; flex-direction: column; }
+        .header { background: linear-gradient(135deg, #fb6428 0%, #e55a20 100%); padding: 16px 24px; color: white; flex-shrink: 0; }
+        .header h1 { font-size: 20px; margin-bottom: 4px; }
+        .header p { opacity: 0.9; font-size: 13px; }
+        .back-link { color: white; opacity: 0.8; text-decoration: none; font-size: 12px; display: inline-block; margin-bottom: 6px; }
+        .back-link:hover { opacity: 1; }
+        .compare-container { display: flex; flex: 1; overflow: hidden; }
+        .panel { flex: 1; display: flex; flex-direction: column; border-right: 2px solid var(--primary); }
+        .panel:last-child { border-right: none; }
+        .panel-header { padding: 8px 16px; background: var(--bg-primary); border-bottom: 1px solid var(--border-primary); font-weight: 600; font-size: 13px; flex-shrink: 0; }
+        .panel iframe { flex: 1; border: none; width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="git-history.html" class="back-link">← Назад к слепкам</a>
+        <h1>Сравнение слепков</h1>
+        <p id="title">Загрузка...</p>
+    </div>
+    <div class="compare-container">
+        <div class="panel">
+            <div class="panel-header" id="leftHeader">-</div>
+            <iframe id="leftFrame"></iframe>
+        </div>
+        <div class="panel">
+            <div class="panel-header" id="rightHeader">-</div>
+            <iframe id="rightFrame"></iframe>
+        </div>
+    </div>
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const from = params.get('from') || '2025-11-27';
+        const to = params.get('to') || '2025-11-28';
+
+        document.getElementById('title').textContent = `${from} → ${to}`;
+        document.getElementById('leftHeader').textContent = from;
+        document.getElementById('rightHeader').textContent = to;
+
+        document.getElementById('leftFrame').src = `snapshots/${from}.html`;
+        document.getElementById('rightFrame').src = `snapshots/${to}.html`;
+
+        // Sync scroll between iframes
+        let syncing = false;
+
+        function syncScroll(source, target) {
+            if (syncing) return;
+            syncing = true;
+            try {
+                const sourceDoc = source.contentDocument || source.contentWindow.document;
+                const targetDoc = target.contentDocument || target.contentWindow.document;
+                const sourceGraph = sourceDoc.querySelector('.git-graph');
+                const targetGraph = targetDoc.querySelector('.git-graph');
+                if (sourceGraph && targetGraph) {
+                    targetGraph.scrollTop = sourceGraph.scrollTop;
+                }
+            } catch (e) {}
+            syncing = false;
+        }
+
+        window.addEventListener('load', () => {
+            const leftFrame = document.getElementById('leftFrame');
+            const rightFrame = document.getElementById('rightFrame');
+
+            try {
+                leftFrame.contentWindow.addEventListener('scroll', () => syncScroll(leftFrame, rightFrame), true);
+                rightFrame.contentWindow.addEventListener('scroll', () => syncScroll(rightFrame, leftFrame), true);
+            } catch (e) {
+                // Cross-origin restriction
+            }
+        });
+    </script>
+</body>
+</html>

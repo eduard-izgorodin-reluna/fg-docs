@@ -22,18 +22,20 @@
         .snapshot-stats { font-size: 13px; color: rgba(18,18,18,0.5); }
         .snapshot-link { padding: 8px 16px; background: var(--primary); color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500; }
         .snapshot-link:hover { background: #e55a20; }
-        .compare-section { margin-top: 24px; }
-        .compare-row { display: flex; gap: 16px; align-items: center; }
-        .compare-select { flex: 1; padding: 10px 16px; border: 1px solid var(--border-primary); border-radius: 6px; font-size: 14px; }
+        .compare-section { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border-primary); }
+        .compare-section h3 { font-size: 16px; margin-bottom: 16px; color: var(--text-primary); }
+        .compare-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+        .compare-select { flex: 1; min-width: 150px; padding: 10px 16px; border: 1px solid var(--border-primary); border-radius: 6px; font-size: 14px; background: white; }
         .compare-btn { padding: 10px 24px; background: var(--success); color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; }
         .compare-btn:hover { background: #158a7a; }
+        .compare-btn:disabled { background: #ccc; cursor: not-allowed; }
         .latest-badge { background: var(--success); color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>📊 Git History</h1>
-        <p>FG • Слепки истории коммитов</p>
+        <h1>Git History</h1>
+        <p>FG - Слепки истории коммитов</p>
     </div>
     <div class="container">
         <div class="card">
@@ -42,13 +44,47 @@
                 <li class="snapshot-item">
                     <div>
                         <span class="snapshot-date">2025-11-28</span><span class="latest-badge">latest</span>
-                        <div class="snapshot-stats">3143 коммитов • 41 авторов</div>
+                        <div class="snapshot-stats">3143 коммитов - 41 авторов - 149 PR</div>
                     </div>
                     <a href="snapshots/2025-11-28.html" class="snapshot-link">Открыть</a>
                 </li>
+                <li class="snapshot-item">
+                    <div>
+                        <span class="snapshot-date">2025-11-27</span>
+                        <div class="snapshot-stats">3062 коммитов - 40 авторов - 129 PR</div>
+                    </div>
+                    <a href="snapshots/2025-11-27.html" class="snapshot-link">Открыть</a>
+                </li>
             </ul>
+
+            <div class="compare-section">
+                <h3>Сравнить слепки</h3>
+                <div class="compare-row">
+                    <select id="compareFrom" class="compare-select">
+                        <option value="2025-11-27" data-commits="3062" data-authors="40" data-prs="129">2025-11-27</option>
+                        <option value="2025-11-28" data-commits="3143" data-authors="41" data-prs="149">2025-11-28</option>
+                    </select>
+                    <span>→</span>
+                    <select id="compareTo" class="compare-select">
+                        <option value="2025-11-28" data-commits="3143" data-authors="41" data-prs="149">2025-11-28</option>
+                        <option value="2025-11-27" data-commits="3062" data-authors="40" data-prs="129">2025-11-27</option>
+                    </select>
+                    <button class="compare-btn" onclick="compare()">Сравнить</button>
+                </div>
+            </div>
         </div>
-        
     </div>
+
+    <script>
+        function compare() {
+            const from = document.getElementById('compareFrom').value;
+            const to = document.getElementById('compareTo').value;
+            if (from === to) {
+                alert('Выберите разные слепки');
+                return;
+            }
+            window.location.href = 'compare.html?from=' + from + '&to=' + to;
+        }
+    </script>
 </body>
 </html>
